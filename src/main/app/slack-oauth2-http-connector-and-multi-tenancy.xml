@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:oauth2="http://www.mulesoft.org/schema/mule/oauth2" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/oauth2 http://www.mulesoft.org/schema/mule/oauth2/current/mule-oauth2.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+
+    <oauth2:token-manager-config name="token-manager" doc:name="Token Manager Config"/>
+    <http:request-config name="HTTP_Request_Configuration" protocol="HTTPS" host="slack.com" port="443" basePath="api" doc:name="HTTP Request Configuration">
+        <oauth2:authorization-code-grant-type clientId="${slack.clientId}" clientSecret="${slack.clientSecret}" redirectionUrl="http://localhost:8083/redirect-url" tokenManager-ref="token-manager" resourceOwnerId="#[flowVars.userId]" localAuthorizationUrlResourceOwnerId="#[message.inboundProperties.'http.query.params'.userId]">
+            <oauth2:authorization-request authorizationUrl="https://slack.com/oauth/authorize" localAuthorizationUrl="http://localhost:8083/login" scopes="read"/>
+            <oauth2:token-request tokenUrl="https://slack.com/api/oauth.access">
+                <oauth2:token-response accessToken="#[json:'access_token']" refreshToken="#[json:'access_token']"/>
+            </oauth2:token-request>
+        </oauth2:authorization-code-grant-type>
+    </http:request-config>
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration"/>
+    <flow name="slack-oauth2-flow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/auth.test" doc:name="8081/auth.test"/>
+        <set-variable variableName="userId" value="#[message.inboundProperties.'http.query.params'.get('userId')]" doc:name="Retrieve User ID -&gt; flowVars.userId"/>
+        <http:request config-ref="HTTP_Request_Configuration" path="auth.test" method="GET" doc:name="slack.com/auth.test">
+            <http:request-builder>
+                <http:query-param paramName="token" value="#[oauthContext(&quot;token-manager&quot;,flowVars.userId).getAccessToken()]"/>
+            </http:request-builder>
+        </http:request>
+        <logger message="#[&quot;This is the Slack Access Token --&gt; &quot; + oauthContext(&quot;token-manager&quot;,flowVars.userId).getAccessToken()]" level="INFO" doc:name="Log Access Token"/>
+    </flow>
+</mule>
